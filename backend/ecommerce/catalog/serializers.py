@@ -34,9 +34,22 @@ class ProdutoSerializer(serializers.ModelSerializer):
             'descricao', 
             'preco', 
             'quantidade_estoque',
+            'imagem',
             'criado_em',
             'atualizado_em'
         ]
+
+    def validate_imagem(self, value):
+        """
+        Valida se o tamanho da imagem não ultrapassa 5MB.
+        """
+        # 5MB = 5 * 1024 * 1024 bytes
+        limite_tamanho = 5 * 1024 * 1024
+        
+        if value.size > limite_tamanho:
+            raise serializers.ValidationError("A imagem não pode ser maior que 5 MB.")
+        
+        return value
         
     def validate_preco(self, value):
         """

@@ -35,7 +35,6 @@ class PedidoSerializer(serializers.ModelSerializer):
     """
     Serializer principal para o Pedido / Carrinho.
     """
-    # Cria o aninhamento para listar todos os itens que pertencem a este pedido
     itens = ItemPedidoSerializer(many=True, read_only=True)
     valor_total = serializers.SerializerMethodField()
 
@@ -48,17 +47,22 @@ class PedidoSerializer(serializers.ModelSerializer):
             'itens', 
             'cep_entrega', 
             'valor_frete', 
+            'valor_desconto', 
             'valor_total', 
             'criado_em', 
             'atualizado_em'
         ]
-        read_only_fields = ['cliente', 'status', 'valor_frete']
+        read_only_fields = ['cliente', 'status', 'valor_frete', 'valor_desconto']
 
     def get_valor_total(self, obj):
         """
-        Soma o subtotal de todos os itens do pedido para dar o valor total do carrinho.
+        Soma o subtotal dos itens, subtrai o desconto do cupom e adiciona o frete.
         """
-        return sum(item.quantidade * item.preco_unitario for item in obj.itens.all())
+        subtotal = sum(item.quantidade * item.preco_unitario for item in obj.itens.all())
+        frete = float(obj.valor_frete or 0)
+        desconto = float(obj.valor_desconto or 0)
+        
+        return float(subtotal) - desconto + frete
 
 
 class AdicionarItemSerializer(serializers.Serializer):

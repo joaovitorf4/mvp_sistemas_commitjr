@@ -8,7 +8,7 @@ class CupomSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = Cupom
-        fields = ['codigo', 'percentual_desconto']
+        fields = ['id', 'codigo', 'percentual_desconto', 'ativo', 'data_validade', 'vendedor', 'criado_em']
 
 
 class ValidarCupomSerializer(serializers.Serializer):

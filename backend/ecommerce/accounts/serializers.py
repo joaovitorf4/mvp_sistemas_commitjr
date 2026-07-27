@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
 
@@ -52,3 +53,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             cep=validated_data.get('cep', None)
         )
         return user
+    
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Pega a resposta padrão (que vem com access e refresh)
+        data = super().validate(attrs)
+        
+        # injeta o tipo_usuario e o username no corpo da resposta JSON
+        data['tipo_usuario'] = self.user.tipo_usuario
+        data['username'] = self.user.username
+        
+        return data

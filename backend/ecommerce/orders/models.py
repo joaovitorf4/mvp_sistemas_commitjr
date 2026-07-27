@@ -19,6 +19,7 @@ class Pedido(models.Model):
     # Informações de entrega e valores calculados
     cep_entrega = models.CharField(max_length=8, blank=True, null=True)
     valor_frete = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    valor_desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)  # CAMPO ADICIONADO
     valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -41,7 +42,7 @@ class ItemPedido(models.Model):
     )
     quantidade = models.PositiveIntegerField(default=1)
     
-    # IMPORTANTE: Guardamos o preço do momento da compra para histórico financeiro.
+    # IMPORTANTE: Guarda o preço do momento da compra para histórico financeiro.
     preco_unitario = models.DecimalField(max_digits=10, decimal_places=2)
 
     def __str__(self):

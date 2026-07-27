@@ -39,6 +39,8 @@ class ProdutoSerializer(serializers.ModelSerializer):
             'atualizado_em'
         ]
 
+        read_only_fields = ['vendedor']
+
     def validate_imagem(self, value):
         """
         Valida se o tamanho da imagem não ultrapassa 5MB.

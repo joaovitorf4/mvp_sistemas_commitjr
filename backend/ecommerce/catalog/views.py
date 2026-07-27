@@ -30,7 +30,7 @@ class IsDonoDoProduto(permissions.BasePermission):
 
 # --- VIEWS PÚBLICAS (VITRINE) ---
 
-class ProdutoListView(generics.ListAPIView):
+class ProdutoListView(generics.ListCreateAPIView):
     """
     Lista todos os produtos disponíveis no marketplace (Público).
     """
@@ -38,8 +38,13 @@ class ProdutoListView(generics.ListAPIView):
     serializer_class = ProdutoSerializer
     permission_classes = [permissions.AllowAny] # Livre para todos
 
+    # ADICIONE APENAS ESTE MÉTODO ABAIXO:
+    def perform_create(self, serializer):
+        # Vincula o produto ao usuário autenticado que fez a requisição
+        serializer.save(vendedor=self.request.user)
 
-class ProdutoDetailView(generics.RetrieveAPIView):
+
+class ProdutoDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     Exibe os detalhes de um produto específico (Público).
     """

@@ -1,6 +1,7 @@
-from rest_framework import views, status, permissions
+from rest_framework import views, generics, status, permissions
 from rest_framework.response import Response
 from .serializers import ValidarCupomSerializer, CupomSerializer
+from .models import Cupom
 
 class ValidarCupomView(views.APIView):
     """
@@ -12,7 +13,6 @@ class ValidarCupomView(views.APIView):
         serializer = ValidarCupomSerializer(data=request.data)
         
         if serializer.is_valid():
-            # Pega o objeto cupom que foi validado com sucesso lá no serializer
             cupom = serializer.validated_data['codigo']
             
             return Response(
@@ -24,3 +24,28 @@ class ValidarCupomView(views.APIView):
             )
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CupomListCreateView(generics.ListCreateAPIView):
+    """
+    Lista e cria cupons pertencentes ao vendedor autenticado.
+    """
+    serializer_class = CupomSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Cupom.objects.filter(vendedor=self.request.user).order_by('-id')
+
+    def perform_create(self, serializer):
+        serializer.save(vendedor=self.request.user)
+
+
+class CupomDetailView(generics.DestroyAPIView):
+    """
+    Permite ao vendedor remover um cupom cadastrado.
+    """
+    serializer_class = CupomSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Cupom.objects.filter(vendedor=self.request.user)

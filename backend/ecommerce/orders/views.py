@@ -1,6 +1,7 @@
 from rest_framework import views, status, permissions
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from django.db import models
 from .models import Pedido, ItemPedido
 from catalog.models import Produto
 from .serializers import PedidoSerializer, AdicionarItemSerializer
@@ -16,6 +17,22 @@ class CarrinhoView(views.APIView):
         pedido, _ = Pedido.objects.get_or_create(cliente=request.user, status='carrinho')
         serializer = PedidoSerializer(pedido)
         return Response(serializer.data)
+
+    def delete(self, request):
+        item_id = request.data.get('item_id')
+        
+        if not item_id:
+            return Response({'erro': 'ID do item não informado.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Busca o carrinho (Pedido com status 'carrinho') do usuário logado
+        pedido = Pedido.objects.filter(cliente=request.user, status='carrinho').first()
+        
+        if pedido:
+            # Remove o item da tabela ItemPedido correspondente ao ID enviado
+            ItemPedido.objects.filter(pedido=pedido, id=item_id).delete()
+            return Response({'mensagem': 'Item removido com sucesso.'}, status=status.HTTP_200_OK)
+
+        return Response({'erro': 'Carrinho não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class AdicionarItemView(views.APIView):
@@ -59,13 +76,15 @@ class AdicionarItemView(views.APIView):
 
 class FinalizarPedidoView(views.APIView):
     """
-    Fecha o carrinho, valida estoque final, calcula frete fake e altera status para pago.
+    Fecha o carrinho, valida estoque final, registra frete e desconto, e altera status para pago.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        # Busca o carrinho atual do usuário
         pedido = Pedido.objects.filter(cliente=request.user, status='carrinho').first()
+        
+        frete = request.data.get('valor_frete') if request.data.get('valor_frete') is not None else request.data.get('frete', 0)
+        valor_desconto = request.data.get('valor_desconto') if request.data.get('valor_desconto') is not None else request.data.get('desconto', 0)
         
         if not pedido or not pedido.itens.exists():
             return Response({"detail": "Seu carrinho está vazio."}, status=status.HTTP_400_BAD_REQUEST)
@@ -87,17 +106,86 @@ class FinalizarPedidoView(views.APIView):
             item.produto.quantidade_estoque -= item.quantidade
             item.produto.save()
         
-        # 3. Regra de Negócio: Cálculo de frete simulado e fechamento
+        # 3. Regra de Negócio: Grava CEP, valor_frete e valor_desconto
+        subtotal = sum(item.quantidade * item.preco_unitario for item in pedido.itens.all())
+        
         pedido.cep_entrega = cep_entrega
-        pedido.valor_frete = 15.00  # Valor fixo simulado para o MVP
-        pedido.status = 'pago'      # Transiciona o status, congelando o carrinho
+        pedido.valor_frete = frete
+        pedido.valor_desconto = valor_desconto
+        pedido.valor_total = float(subtotal) - float(valor_desconto) + float(frete)
+        pedido.status = 'pago'
         pedido.save()
         
         return Response(
             {
                 "detail": "Pedido finalizado com sucesso!", 
                 "pedido_id": pedido.id,
-                "status": pedido.status
+                "status": pedido.status,
+                "frete": pedido.valor_frete
             }, 
             status=status.HTTP_200_OK
         )
+
+class MeusPedidosView(views.APIView):
+    """
+    Retorna o histórico de todos os pedidos finalizados do cliente autenticado.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        # Busca os pedidos do usuário, excluindo o carrinho ativo e ordenando dos mais recentes para os mais antigos
+        pedidos = Pedido.objects.filter(cliente=request.user).exclude(status='carrinho').order_by('-id')
+        serializer = PedidoSerializer(pedidos, many=True)
+        return Response(serializer.data)
+
+class AtualizarItemCarrinhoView(views.APIView):
+    """
+    Atualiza a quantidade de um item do carrinho do usuário autenticado.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            # Garante que o item pertence a um carrinho ativo do usuário logado
+            item = ItemPedido.objects.get(id=pk, pedido__cliente=request.user, pedido__status='carrinho')
+        except ItemPedido.DoesNotExist:
+            return Response({"detail": "Item não encontrado no carrinho."}, status=status.HTTP_404_NOT_FOUND)
+
+        quantidade = request.data.get('quantidade')
+
+        if quantidade is None or int(quantidade) < 1:
+            return Response({"detail": "Quantidade deve ser pelo menos 1."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validação de estoque no backend
+        if item.produto.quantidade_estoque < int(quantidade):
+            return Response(
+                {"detail": f"Estoque insuficiente. Disponível: {item.produto.quantidade_estoque}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        item.quantidade = int(quantidade)
+        item.save()
+
+        return Response({"detail": "Quantidade atualizada com sucesso!"}, status=status.HTTP_200_OK)
+
+class VendasVendedorView(views.APIView):
+    """
+    Retorna todos os pedidos de clientes que possuem pelo menos
+    um produto pertencente ao vendedor autenticado.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if getattr(request.user, 'tipo_usuario', '').lower() != 'vendedor':
+            return Response(
+                {"detail": "Acesso permitido apenas para vendedores."}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Filtra pedidos que possuem produtos do vendedor e exclui os que são apenas 'carrinho'
+        pedidos = Pedido.objects.filter(
+            itens__produto__vendedor=request.user
+        ).exclude(status='carrinho').distinct().order_by('-criado_em')
+
+        serializer = PedidoSerializer(pedidos, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -3,7 +3,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import get_user_model
-from .serializers import RegisterSerializer, UserProfileSerializer
+from .serializers import CustomTokenObtainPairSerializer, RegisterSerializer, UserProfileSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 User = get_user_model()
 
@@ -28,3 +29,6 @@ class UserProfileView(APIView):
         # O DRF injeta o utilizador autenticado diretamente em request.user através do Token
         serializer = UserProfileSerializer(request.user)
         return Response(serializer.data)
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
